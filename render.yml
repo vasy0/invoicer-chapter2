@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: invoicer-api
+    runtime: docker
+    repo: https://github.com/ваш-username/invoicer-chapter2
+    plan: free
+    branch: main
+    region: frankfurt  # Или другой доступный
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
+        value: 8080
+    healthCheckPath: /__version__
+    autoDeploy: false  # Будем деплоить через GitHub Actions
+
+databases:
+  - name: invoicer-db
+    plan: free
+    databaseName: invoicer
+    user: invoicer
