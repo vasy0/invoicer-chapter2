@@ -1,17 +1,26 @@
 # Этап сборки
 FROM golang:1.21-alpine AS builder
 
-WORKDIR /app
-COPY . .
+# Устанавливаем git для загрузки зависимостей
+RUN apk add --no-cache git
 
-# Загружаем зависимости
+WORKDIR /app
+
+# Сначала копируем файлы зависимостей
+COPY go.mod go.sum ./
 RUN go mod download
 
+# Затем копируем остальной код
+COPY . .
+
 # Компилируем статический бинарник
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags '-extldflags "-static"' -o invoicer ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags '-extldflags "-static"' -o invoicer .
 
 # Этап запуска
 FROM alpine:latest
+
+# Устанавливаем CA certificates для HTTPS
+RUN apk add --no-cache ca-certificates
 
 # Создаем непривилегированного пользователя
 RUN addgroup -g 10001 app && \
@@ -31,8 +40,8 @@ USER app
 # Открываем порт
 EXPOSE 8080
 
-# Переменные окружения для Render
+# Переменные окружения
 ENV PORT=8080
 
 # Запускаем приложение
-ENTRYPOINT ["/app/invoicer"]
+CMD ["/app/invoicer"]
