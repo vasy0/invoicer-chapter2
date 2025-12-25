@@ -21,9 +21,9 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Build Docker image
-        run: docker build -t ${{ vast1uuu }}/invoicer:latest .
+        run: docker build -t ${{ secrets.DOCKER_USER }}/invoicer:latest .
 
       - name: Push Docker image
         run: |
-          echo ${{ Wednesday123123 }} | docker login -u ${{ vast1uuu }} --password-stdin
-          docker push ${{ vast1uuu }}/invoicer:latest
+          echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+          docker push ${{ secrets.DOCKER_USER }}/invoicer:latest
