@@ -1,0 +1,111 @@
+name: Build, Test and Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  # Имя образа Docker
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Install dependencies
+      run: go mod download
+    
+    - name: Run unit tests
+      run: go test ./... -v
+
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    # Запускаем только при пуше в main/master
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ secrets.DOCKER_USERNAME }}/invoicer
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Yandex Cloud
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Configure Yandex Cloud CLI
+      run: |
+        curl https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+        yc init
+        echo "${{ secrets.YC_SERVICE_ACCOUNT_KEY }}" > key.json
+        yc config set service-account-key key.json
+    
+    - name: Deploy to Yandex Cloud Serverless Container
+      run: |
+        # Создаем или обновляем serverless container
+        yc serverless container create \
+          --name invoicer \
+          --description "Invoicer API" \
+          --cores 1 \
+          --memory 1GB \
+          --concurrency 8 \
+          --execution-timeout 30s \
+          --service-account-id ${{ secrets.YC_SERVICE_ACCOUNT_ID }} \
+          --folder-id ${{ secrets.YC_FOLDER_ID }}
+        
+        # Обновляем ревизию контейнера
+        yc serverless container revision deploy \
+          --container-name invoicer \
+          --image ${{ secrets.DOCKER_USERNAME }}/invoicer:latest \
+          --cores 1 \
+          --memory 1GB \
+          --concurrency 8 \
+          --execution-timeout 30s \
+          --environment "DATABASE_URL=${{ secrets.DATABASE_URL }}"
