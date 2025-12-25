@@ -1,23 +1,14 @@
-# Dockerfile
-FROM golang:1.19-alpine
+FROM golang:latest
+RUN addgroup --gid 10001 app
+RUN adduser --gid 10001 --uid 10001 \
+    --home /app --shell /sbin/nologin \
+    --disabled-password app
 
-WORKDIR /app
+RUN mkdir /app/statics/
+ADD statics /app/statics/
 
-# Копируем все файлы
-COPY . .
-
-# Устанавливаем старый режим для совместимости
-ENV GO111MODULE=auto
-
-# Пробуем собрать
-RUN go build -o invoicer .
-
-# Если не получилось, создаем простой сервер
-RUN if [ ! -f "invoicer" ]; then \
-    echo 'package main\n\nimport "net/http"\n\nfunc main() {\n\thttp.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {\n\t\tw.Write([]byte("OK"))\n\t})\n\thttp.ListenAndServe(":8080", nil)\n}' > simple.go && \
-    go build -o invoicer simple.go; \
-fi
-
+COPY bin/invoicer /app/invoicer
+USER app
 EXPOSE 8080
-
-CMD ["./invoicer"]
+WORKDIR /app
+ENTRYPOINT /app/invoicer
