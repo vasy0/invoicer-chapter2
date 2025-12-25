@@ -1,18 +1,22 @@
+# render.yaml
 services:
   - type: web
     name: invoicer-api
     runtime: docker
-    repo: https://github.com/ваш-username/invoicer-chapter2
     plan: free
+    region: frankfurt  # Или oregon, ohio
     branch: main
-    region: frankfurt  # Или другой доступный
     envVars:
-      - key: DATABASE_URL
-        sync: false
       - key: PORT
         value: 8080
+      - key: DATABASE_URL
+        fromDatabase:
+          name: invoicer-db
+          property: connectionString
     healthCheckPath: /__version__
-    autoDeploy: false  # Будем деплоить через GitHub Actions
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: false  # Мы будем деплоить через GitHub Actions
 
 databases:
   - name: invoicer-db
